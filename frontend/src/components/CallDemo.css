@@ -1,0 +1,208 @@
+.call-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #0f0f0f;
+}
+
+.call-header {
+  padding: 18px 24px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  border-bottom: 1px solid #1e1e1e;
+}
+
+.call-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.call-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  background: #141414;
+  border: 1px solid #222;
+  border-radius: 24px;
+  padding: 36px 32px;
+  width: 100%;
+  max-width: 420px;
+  text-align: center;
+  transition: border-color 0.3s;
+}
+
+.call-card.active {
+  border-color: #22c55e44;
+  box-shadow: 0 0 30px #22c55e0a;
+}
+
+.avatar {
+  font-size: 3rem;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #1e1e1e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #2a2a2a;
+}
+
+.call-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #e0e0e0;
+}
+
+.call-sub {
+  font-size: 0.83rem;
+  color: #555;
+  max-width: 280px;
+}
+
+.call-timer {
+  font-size: 1.4rem;
+  font-weight: 300;
+  color: #22c55e;
+  letter-spacing: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Status ring */
+.status-ring {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #333;
+  transition: background 0.3s;
+}
+.status-ring.listening  { background: #818cf8; box-shadow: 0 0 8px #818cf8; animation: blink 1s infinite; }
+.status-ring.processing { background: #f59e0b; box-shadow: 0 0 8px #f59e0b; }
+.status-ring.speaking   { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.status-label {
+  font-size: 0.8rem;
+  color: #555;
+  min-height: 16px;
+  margin-top: -6px;
+}
+
+/* Call buttons */
+.call-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 28px;
+  border-radius: 50px;
+  border: none;
+  font-size: 0.92rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.2s;
+  margin-top: 4px;
+}
+
+.call-btn:active { transform: scale(0.97); }
+
+.call-btn.start {
+  background: #16a34a;
+  color: #fff;
+}
+.call-btn.start:hover { background: #15803d; }
+
+.call-btn.end {
+  background: #dc2626;
+  color: #fff;
+}
+.call-btn.end:hover { background: #b91c1c; }
+
+/* Voice boxes */
+.voice-box {
+  width: 100%;
+  text-align: left;
+  border-radius: 10px;
+  padding: 11px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.voice-box.interim    { background: #1a1a1a; border: 1px dashed #333; }
+.voice-box.transcript { background: #1a1a2e; border: 1px solid #2d2d5e; }
+.voice-box.answer     { background: #0f1f0f; border: 1px solid #1a3a1a; }
+
+.voice-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+}
+
+.voice-box.interim    .voice-label { color: #444; }
+.voice-box.transcript .voice-label { color: #818cf8; }
+.voice-box.answer     .voice-label { color: #22c55e; }
+
+.voice-box p {
+  font-size: 0.88rem;
+  color: #d4d4d4;
+  line-height: 1.5;
+}
+
+.voice-box.interim p {
+  color: #555;
+  font-style: italic;
+}
+
+/* call actions row */
+.call-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.mic-btn {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 1.3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, background 0.2s;
+  background: #1e1e1e;
+  flex-shrink: 0;
+}
+.mic-btn:hover:not(:disabled) { transform: scale(1.1); }
+.mic-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.mic-btn.listening  { background: #2d1f5e; animation: pulse 1.4s infinite; }
+.mic-btn.speaking   { background: #3b1f1f; }
+.mic-btn.waiting    { background: #2a1f00; }
+
+@keyframes pulse {
+  0%   { box-shadow: 0 0 0 0   #818cf866; }
+  70%  { box-shadow: 0 0 0 12px #818cf800; }
+  100% { box-shadow: 0 0 0 0   #818cf800; }
+}
+
+.waiting-msg {
+  font-size: 0.78rem;
+  color: #f59e0b;
+  text-align: center;
+  max-width: 280px;
+}
