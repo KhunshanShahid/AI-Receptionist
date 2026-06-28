@@ -7,7 +7,7 @@ from app.services.vector_store import add_documents, clear_collection
 router = APIRouter()
 
 
-def chunk_text(text, chunk_size=500, overlap=100):
+def chunk_text(text, chunk_size=200, overlap=30):
     chunks = []
     start = 0
 

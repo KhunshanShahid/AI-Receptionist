@@ -43,6 +43,13 @@
   box-shadow: 0 0 30px #22c55e0a;
 }
 
+.call-card.tappable {
+  cursor: pointer;
+}
+.call-card.tappable:active {
+  background: #161616;
+}
+
 .avatar {
   font-size: 3rem;
   width: 72px;

@@ -3,35 +3,35 @@ import './CallDemo.css'
 
 const BACKEND = 'http://localhost:8000'
 const MAX_NO_SPEECH = 3
+const GREETING = "Hi, this is Bella Cucina! How can I help you today?"
 
 const STATUS = {
   IDLE:       'idle',
   LISTENING:  'listening',
   PROCESSING: 'processing',
   SPEAKING:   'speaking',
-  WAITING:    'waiting',   // after max no-speech retries
+  WAITING:    'waiting',
 }
 
 export default function CallDemo() {
-  const [inCall,       setInCall]       = useState(false)
-  const [status,       setStatus]       = useState(STATUS.IDLE)
-  const [interimText,  setInterimText]  = useState('')   // real-time words as heard
-  const [transcript,   setTranscript]   = useState('')   // confirmed last question
-  const [answer,       setAnswer]       = useState('')
-  const [timer,        setTimer]        = useState(0)
+  const [inCall,      setInCall]      = useState(false)
+  const [status,      setStatus]      = useState(STATUS.IDLE)
+  const [interimText, setInterimText] = useState('')
+  const [transcript,  setTranscript]  = useState('')
+  const [answer,      setAnswer]      = useState('')
+  const [timer,       setTimer]       = useState(0)
 
-  // refs — safe to read inside recognition/TTS callbacks
   const transcriptRef  = useRef('')
   const historyRef     = useRef([])
   const inCallRef      = useRef(false)
   const recognitionRef = useRef(null)
-  const ttsKeepalive   = useRef(null)
+  const audioRef       = useRef(null)
+  const lastAiTextRef  = useRef('')   // track AI speech to detect echo
   const noSpeechCount  = useRef(0)
   const timerInterval  = useRef(null)
 
   useEffect(() => { inCallRef.current = inCall }, [inCall])
 
-  // call timer
   useEffect(() => {
     if (inCall) {
       setTimer(0)
@@ -47,47 +47,50 @@ export default function CallDemo() {
     return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
   }
 
-  // ── FIX 1: Chrome TTS keepalive ──────────────────────────────────────────
-  function speak(text) {
-    window.speechSynthesis.cancel()
-    clearInterval(ttsKeepalive.current)
-
-    const utter = new SpeechSynthesisUtterance(text)
-    utter.rate = 1
-
-    utter.onstart = () => {
-      setStatus(STATUS.SPEAKING)
-      // Chrome stops speaking after ~15s — pause/resume every 10s to prevent it
-      ttsKeepalive.current = setInterval(() => {
-        if (window.speechSynthesis.speaking) {
-          window.speechSynthesis.pause()
-          window.speechSynthesis.resume()
-        }
-      }, 10000)
+  function stopAudio() {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.src = ''
+      audioRef.current = null
     }
-
-    utter.onend = () => {
-      clearInterval(ttsKeepalive.current)
-      if (inCallRef.current) startListening()
-      else setStatus(STATUS.IDLE)
-    }
-
-    utter.onerror = () => {
-      clearInterval(ttsKeepalive.current)
-      if (inCallRef.current) startListening()
-    }
-
-    window.speechSynthesis.speak(utter)
   }
 
-  // ── FIX 2: Interrupt ─────────────────────────────────────────────────────
-  function interrupt() {
-    clearInterval(ttsKeepalive.current)
-    window.speechSynthesis.cancel()
-    startListening()
+  // Returns true if the recognized text is likely the mic picking up the AI's own voice
+  function isEcho(recognized) {
+    const aiText   = lastAiTextRef.current.toLowerCase().replace(/[^a-z0-9 ]/g, ' ')
+    const userText = recognized.toLowerCase().replace(/[^a-z0-9 ]/g, ' ')
+    const words    = userText.split(/\s+/).filter(w => w.length > 3)
+    if (words.length === 0) return false
+    const matches = words.filter(w => aiText.includes(w)).length
+    return matches / words.length > 0.55
   }
 
-  // ── FIX 3: Conversation history sent with each request ───────────────────
+  async function speak(text) {
+    stopAudio()
+    lastAiTextRef.current = text
+    setStatus(STATUS.SPEAKING)
+
+    try {
+      const audio = new Audio(`${BACKEND}/tts?text=${encodeURIComponent(text)}`)
+      audioRef.current = audio
+
+      audio.onended = () => {
+        if (!inCallRef.current) { setStatus(STATUS.IDLE); return }
+        // Short pause so room echo dies before mic opens
+        setTimeout(startListening, 400)
+      }
+
+      audio.onerror = () => {
+        if (inCallRef.current) setTimeout(startListening, 400)
+      }
+
+      audio.play()
+    } catch (err) {
+      console.error('TTS error:', err)
+      if (inCallRef.current) startListening()
+    }
+  }
+
   async function queryBackend(question) {
     setStatus(STATUS.PROCESSING)
     setInterimText('')
@@ -97,20 +100,17 @@ export default function CallDemo() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: question,
-          history: historyRef.current.slice(-6)   // last 3 exchanges
+          query:   question,
+          history: historyRef.current.slice(-6)
         })
       })
       const data = await res.json()
       setAnswer(data.answer)
-
-      // update history ref + state
       historyRef.current = [
         ...historyRef.current,
         { role: 'user',      text: question },
         { role: 'assistant', text: data.answer }
       ]
-
       speak(data.answer)
     } catch {
       const err = 'Could not reach the server.'
@@ -119,7 +119,6 @@ export default function CallDemo() {
     }
   }
 
-  // ── FIX 4+5: Interim transcript + no-speech guard ────────────────────────
   function startListening() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SpeechRecognition) {
@@ -138,10 +137,8 @@ export default function CallDemo() {
 
     recognition.onstart = () => setStatus(STATUS.LISTENING)
 
-    // FIX 4: show words in real-time as interim, separate from final
     recognition.onresult = (e) => {
-      let interim = ''
-      let final   = ''
+      let interim = '', final = ''
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) final   += e.results[i][0].transcript
         else                       interim += e.results[i][0].transcript
@@ -156,11 +153,17 @@ export default function CallDemo() {
     recognition.onend = () => {
       setInterimText('')
       const said = transcriptRef.current.trim()
+
       if (said) {
+        // Discard if it's the mic picking up the AI's own voice
+        if (isEcho(said)) {
+          transcriptRef.current = ''
+          if (inCallRef.current) startListening()
+          return
+        }
         noSpeechCount.current = 0
         queryBackend(said)
       } else if (inCallRef.current) {
-        // FIX 5: no-speech guard — max 3 silent retries then pause
         noSpeechCount.current++
         if (noSpeechCount.current >= MAX_NO_SPEECH) {
           noSpeechCount.current = 0
@@ -172,7 +175,7 @@ export default function CallDemo() {
     }
 
     recognition.onerror = (e) => {
-      if (e.error === 'no-speech') return  // handled in onend
+      if (e.error === 'no-speech') return
       console.error('Speech error:', e.error)
       if (inCallRef.current) startListening()
     }
@@ -182,12 +185,12 @@ export default function CallDemo() {
 
   function startCall() {
     setInCall(true)
-    setAnswer('')
+    setAnswer(GREETING)
     setTranscript('')
     setInterimText('')
-    historyRef.current = []
+    historyRef.current    = []
     noSpeechCount.current = 0
-    startListening()
+    speak(GREETING)
   }
 
   function endCall() {
@@ -196,9 +199,9 @@ export default function CallDemo() {
     setTranscript('')
     setInterimText('')
     setAnswer('')
-    historyRef.current = []
-    clearInterval(ttsKeepalive.current)
-    window.speechSynthesis.cancel()
+    historyRef.current    = []
+    noSpeechCount.current = 0
+    stopAudio()
     if (recognitionRef.current) {
       try { recognitionRef.current.stop() } catch {}
       recognitionRef.current = null
@@ -209,8 +212,8 @@ export default function CallDemo() {
     [STATUS.IDLE]:       '',
     [STATUS.LISTENING]:  'Listening…',
     [STATUS.PROCESSING]: 'Thinking…',
-    [STATUS.SPEAKING]:   'Tap mic to interrupt',
-    [STATUS.WAITING]:    'Tap mic to continue',
+    [STATUS.SPEAKING]:   'Speaking…',
+    [STATUS.WAITING]:    'Tap to continue',
   }[status]
 
   return (
@@ -218,8 +221,10 @@ export default function CallDemo() {
       <div className="call-header">Call Demo</div>
 
       <div className="call-body">
-        <div className={`call-card ${inCall ? 'active' : ''}`}>
-
+        <div
+          className={`call-card ${inCall ? 'active' : ''} ${status === STATUS.WAITING ? 'tappable' : ''}`}
+          onClick={() => { if (status === STATUS.WAITING) startListening() }}
+        >
           <div className="avatar">🤖</div>
           <p className="call-title">AI Receptionist</p>
 
@@ -237,49 +242,14 @@ export default function CallDemo() {
             </button>
           ) : (
             <div className="call-actions">
-              {/* mic button — doubles as interrupt during speaking / resume during waiting */}
-              <button
-                className={`mic-btn ${status}`}
-                onClick={
-                  status === STATUS.SPEAKING ? interrupt :
-                  status === STATUS.WAITING  ? startListening :
-                  null
-                }
-                disabled={status === STATUS.PROCESSING}
-              >
-                {status === STATUS.SPEAKING ? '✋' : '🎙️'}
-              </button>
-
               <button className="call-btn end" onClick={endCall}>
                 <span>📵</span> End Call
               </button>
             </div>
           )}
 
-          {/* FIX 4: interim transcript (dim, italic) shown in real-time */}
-          {interimText && (
-            <div className="voice-box interim">
-              <span className="voice-label">Hearing</span>
-              <p>{interimText}</p>
-            </div>
-          )}
-
-          {transcript && !interimText && (
-            <div className="voice-box transcript">
-              <span className="voice-label">You</span>
-              <p>{transcript}</p>
-            </div>
-          )}
-
-          {answer && (
-            <div className="voice-box answer">
-              <span className="voice-label">AI</span>
-              <p>{answer}</p>
-            </div>
-          )}
-
           {status === STATUS.WAITING && (
-            <p className="waiting-msg">No speech detected. Tap the mic to continue or end the call.</p>
+            <p className="waiting-msg">No speech detected. Tap anywhere to continue or end the call.</p>
           )}
         </div>
       </div>

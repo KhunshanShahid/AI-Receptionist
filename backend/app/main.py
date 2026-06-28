@@ -4,7 +4,9 @@ from app.routes.upload import router as upload_router
 from app.routes.chat import router as chat_router
 from app.routes.health import router as health_router
 from app.routes.admin import router as admin_router
+from app.routes.tts import router as tts_router
 from app.services.logger import init_db
+from app.services.booking import init_bookings_db
 
 app = FastAPI(
     title="AI Receptionist API",
@@ -12,6 +14,7 @@ app = FastAPI(
 )
 
 init_db()
+init_bookings_db()
 
 app.add_middleware(
     CORSMiddleware,
@@ -34,3 +37,4 @@ def root():
 app.include_router(upload_router)
 app.include_router(chat_router)
 app.include_router(admin_router)
+app.include_router(tts_router)
